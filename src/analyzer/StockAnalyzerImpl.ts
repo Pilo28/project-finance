@@ -1,7 +1,4 @@
-// src/analyzer/StockAnalyzerImpl.ts
-
 import * as fs from 'fs';
-import * as path from 'path';
 import { parse } from 'csv-parse';
 import { StockData } from '../interfaces/StockData';
 import { StockAnalyzer } from '../interfaces/StockAnalyzer';
@@ -14,9 +11,10 @@ class StockAnalyzerImpl implements StockAnalyzer {
     public static isLastThursdayOfMonth(date: Date): boolean {
         const lastDayOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0);
         const dayOfWeek = lastDayOfMonth.getDay();
-        const offset = dayOfWeek >= 4 ? dayOfWeek - 4 : 3 + dayOfWeek;
+        const offset = (dayOfWeek >= 4) ? dayOfWeek - 4 : 7 - (4 - dayOfWeek);
         const lastThursday = new Date(lastDayOfMonth);
         lastThursday.setDate(lastDayOfMonth.getDate() - offset);
+
         return date.getTime() === lastThursday.getTime();
     }
 
@@ -66,26 +64,42 @@ class StockAnalyzerImpl implements StockAnalyzer {
 
     public calculateInvestments(data: StockData[]): number {
         let totalShares = 0;
-
         for (let i = 0; i < data.length; i++) {
             const currentDate = data[i].date;
             if (StockAnalyzerImpl.isLastThursdayOfMonth(currentDate)) {
-                let nextTradingDayIndex = i + 1;
-                while (nextTradingDayIndex < data.length) {
-                    // Verifica si hay cotización para el siguiente día
-                    if (data[nextTradingDayIndex].date.getDay() !== 4) { // Si no es jueves
+                let nextTradingDayIndex = i - 1; // Iniciar en el día anterior para fechas descendentes
+                console.log(`Last Thursday of the month: ${currentDate.toLocaleDateString()}`);
+               // console.log(`Initial nextTradingDayIndex: ${nextTradingDayIndex}`);
+
+                while (nextTradingDayIndex >= 0) { // Asegurarse de no salir de los límites del array
+                    const nextTradingDay = data[nextTradingDayIndex].date;
+                   // console.log(`Checking next trading day: ${nextTradingDay.toLocaleDateString()}`);
+
+                    if (StockAnalyzerImpl.isTradingDay(nextTradingDay)) {
                         const INVEST_AMOUNT = 50;
                         const BROKER_FEE = 0.02;
                         const investAmountAfterFee = StockAnalyzerImpl.roundToThreeDecimals(INVEST_AMOUNT * (1 - BROKER_FEE));
                         const sharesBought = StockAnalyzerImpl.roundToThreeDecimals(investAmountAfterFee / data[nextTradingDayIndex].open);
                         totalShares = StockAnalyzerImpl.roundToThreeDecimals(totalShares + sharesBought);
-                        break; // Sale del bucle una vez que se realiza la compra
+
+                        console.log(`Fecha de compra: ${nextTradingDay.toLocaleDateString()}`);
+                        console.log("monto a invertir", investAmountAfterFee)
+                        console.log("sharesboun", totalShares)
+                        console.log(`Valor de la acción en la apertura: ${data[nextTradingDayIndex].open}`);
+                        break;
                     }
-                    nextTradingDayIndex++;
+
+                    nextTradingDayIndex--;
                 }
             }
         }
+        
         return totalShares;
+    }
+
+    public static isTradingDay(date: Date): boolean {
+        const dayOfWeek = date.getDay();
+        return dayOfWeek !== 0 && dayOfWeek !== 6; // 0 es domingo y 6 es sábado
     }
 }
 
